@@ -49,9 +49,16 @@ namespace RPS
     /// </summary>
     public class AlgorithmOrchestrator : IPlayer
     {
+        #region Constants
+
+        private const int MAX_MEMORY = 10;
+
+        #endregion
+
         #region Fields
 
         private readonly IDictionary<IPlayerAlgorithm, int> _algorithmStats;
+        private readonly IList<IPlayerAlgorithm> _pendingForDeletion;
 
         #endregion
 
@@ -66,16 +73,33 @@ namespace RPS
                 {new ChangeWhenLosingPreviousRoundAlgorithm(), 0},
                 {new ChangeWhenLosingPreviousRoundCounterAlgorithm(), 0}
             };
+
+            _pendingForDeletion = new List<IPlayerAlgorithm>(MAX_MEMORY);
         }
 
         #endregion
 
         public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
+            var roundElapsed = yourPastItems.Count;
+
             // Update the stats first.
-            if (yourPastItems.Count > 0)
+            if (roundElapsed > 0)
             {
                 updateStats(opponentsPastItems.LastOrDefault());
+            }
+
+            // Forget win rates when the max memory has been reached.
+            if (roundElapsed > MAX_MEMORY)
+            {
+                var key = _pendingForDeletion.FirstOrDefault();
+
+                if (key != null)
+                {
+                    _algorithmStats[key]--;
+                }
+
+                _pendingForDeletion.RemoveAt(0);
             }
 
             // Get the item for all algorithms.
@@ -85,7 +109,9 @@ namespace RPS
             }
 
             // Get the algorithm with the highest win rate.
-            return _algorithmStats.Aggregate((l, r) => l.Value > r.Value ? l : r).Key.PreviousItem;
+            var selectedAlgorithm = _algorithmStats.Aggregate((l, r) => l.Value > r.Value ? l : r).Key;
+            _pendingForDeletion.Add(selectedAlgorithm);
+            return selectedAlgorithm.PreviousItem;
         }
 
         private void updateStats(Item opponentsLastItem)
