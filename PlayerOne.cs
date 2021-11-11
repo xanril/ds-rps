@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace RPS
@@ -71,7 +72,8 @@ namespace RPS
             _algorithmStats = new Dictionary<IPlayerAlgorithm, int>
             {
                 {new ChangeWhenLosingPreviousRoundAlgorithm(), 0},
-                {new ChangeWhenLosingPreviousRoundCounterAlgorithm(), 0}
+                {new ChangeWhenLosingPreviousRoundCounterAlgorithm(), 0},
+                {new RandomByNumberOfItemsAlgorithm(), 0}
             };
 
             _pendingForDeletion = new List<IPlayerAlgorithm>(MAX_MEMORY);
@@ -262,31 +264,52 @@ namespace RPS
             return _previousItem;
         }
 
+        #endregion
+    }
+
+    /// <summary>
+    ///     This algorithm randomly get from opponents past items and return a counter for it.
+    /// </summary>   
+    public class RandomByNumberOfItemsAlgorithm : IPlayerAlgorithm
+    {
+        public Item PreviousItem { get; set; }
+
+        public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        {
+            PreviousItem = getMove(opponentsPastItems);
+            return PreviousItem;
+        }
+        
         /// <summary>
-        ///     This algrorithm randomly get from opponents past items and return a counter for it.
+        ///     This algorithm randomly get from opponents past items and return a counter for it.
         /// </summary>        
-        private Item? RandomByNumberOfItems(List<Item> opponentsPastItems){
+        private Item getMove(List<Item> opponentsPastItems)
+        {
             double totalItem = opponentsPastItems.Count;
-            if(totalItem >= 50){
-                 var opponentPick = new Item();
+            if (totalItem >= 50)
+            {
+                var opponentPick = new Item();
                 var ourPick = new Item();
-                opponentPick = opponentsPastItems.OrderBy(x=> Guid.NewGuid()).First();
-                if(opponentPick == Item.Paper){
+                opponentPick = opponentsPastItems.OrderBy(x => Guid.NewGuid()).First();
+                if (opponentPick == Item.Paper)
+                {
                     ourPick = Item.Scissors;
                 }
-                else if(opponentPick == Item.Rock){
+                else if (opponentPick == Item.Rock)
+                {
                     ourPick = Item.Paper;
                 }
-                else if(opponentPick == Item.Scissors){
+                else if (opponentPick == Item.Scissors)
+                {
                     ourPick = Item.Rock;
                 }
                 return ourPick;
             }
-            return null;
-        }
 
-        #endregion
+            return Item.Paper;
+        }
     }
+
 
     #endregion
 
