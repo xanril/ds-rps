@@ -103,6 +103,29 @@ namespace RPS
             return _previousItem;
         }
 
+        /// <summary>
+        ///     This algrorithm randomly get from opponents past items and return a counter for it.
+        /// </summary>        
+        private Item? RandomByNumberOfItems(List<Item> opponentsPastItems){
+            double totalItem = opponentsPastItems.Count;
+            if(totalItem >= 50){
+                 var opponentPick = new Item();
+                var ourPick = new Item();
+                opponentPick = opponentsPastItems.OrderBy(x=> Guid.NewGuid()).First();
+                if(opponentPick == Item.Paper){
+                    ourPick = Item.Scissors;
+                }
+                else if(opponentPick == Item.Rock){
+                    ourPick = Item.Paper;
+                }
+                else if(opponentPick == Item.Scissors){
+                    ourPick = Item.Rock;
+                }
+                return ourPick;
+            }
+            return null;
+        }
+
         #endregion
 
         #region Helpers
