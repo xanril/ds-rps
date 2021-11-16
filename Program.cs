@@ -37,19 +37,21 @@ namespace RPS
                 {
                     winner = Player.None;
                 }
+                else
+                {
+                    if (pone == Item.Paper)
+                    {
+                        winner = ptwo == Item.Scissors ? Player.Two : Player.One;
+                    }
+                    else if (pone == Item.Rock)
+                    {
+                        winner = ptwo == Item.Paper ? Player.Two : Player.One;
 
-                if (pone == Item.Paper)
-                {
-                    winner = ptwo == Item.Scissors ? Player.Two : Player.One;
-                }
-                else if (pone == Item.Rock)
-                {
-                    winner = ptwo == Item.Paper ? Player.Two : Player.One;
-
-                }
-                else if (pone == Item.Scissors)
-                {
-                    winner = ptwo == Item.Rock ? Player.Two : Player.One;
+                    }
+                    else if (pone == Item.Scissors)
+                    {
+                        winner = ptwo == Item.Rock ? Player.Two : Player.One;
+                    }
                 }
 
                 Console.WriteLine("The winner is {0}", winner);
