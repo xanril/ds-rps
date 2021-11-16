@@ -58,8 +58,8 @@ namespace RPS
 
         #region Fields
 
-        private readonly IDictionary<IPlayerAlgorithm, int> _algorithmStats;
-        private readonly IList<IPlayerAlgorithm> _pendingForDeletion;
+        private readonly IList<IPlayerAlgorithm> _algoList;
+        private readonly IList<bool[]> _pendingForDeletionResult;
 
         #endregion
 
@@ -69,14 +69,14 @@ namespace RPS
 
         public AlgorithmOrchestrator()
         {
-            _algorithmStats = new Dictionary<IPlayerAlgorithm, int>
+            _algoList = new List<IPlayerAlgorithm>
             {
-                {new ChangeWhenLosingPreviousRoundAlgorithm(), 0},
-                {new ChangeWhenLosingPreviousRoundCounterAlgorithm(), 0},
-                {new RandomByNumberOfItemsAlgorithm(), 0}
+                new ChangeWhenLosingPreviousRoundAlgorithm(),
+                new ChangeWhenLosingPreviousRoundCounterAlgorithm(),
+                new RandomByNumberOfItemsAlgorithm()
             };
-
-            _pendingForDeletion = new List<IPlayerAlgorithm>(MAX_MEMORY);
+            
+            _pendingForDeletionResult = new List<bool[]>(MAX_MEMORY);
         }
 
         #endregion
@@ -84,50 +84,104 @@ namespace RPS
         public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
             var roundElapsed = yourPastItems.Count;
+            RpsHelper.Log($"[ROUND {roundElapsed + 1}]");
 
             // Update the stats first.
             if (roundElapsed > 0)
             {
-                updateStats(opponentsPastItems.LastOrDefault());
+                updateStats(opponentsPastItems.LastOrDefault(), roundElapsed);
             }
 
             // Forget win rates when the max memory has been reached.
-            if (roundElapsed > MAX_MEMORY)
+            applyMemory(roundElapsed);
+
+            // Just showing some debug information.
+            foreach (var algoItem in _algoList)
             {
-                var key = _pendingForDeletion.FirstOrDefault();
-
-                if (key != null)
-                {
-                    _algorithmStats[key]--;
-                }
-
-                _pendingForDeletion.RemoveAt(0);
+                RpsHelper.Log($"WIN={algoItem.WinCount} | CHANCE={algoItem.GetChanceRate(roundElapsed):n2} | {algoItem.GetType()}");
             }
 
-            // Get the item for all algorithms.
-            foreach (var key in _algorithmStats.Keys)
+            // Performs the move for all algorithm.
+            foreach (var algoItem in _algoList)
             {
-                key.GetItem(yourPastItems, opponentsPastItems);
+                algoItem.GetItem(yourPastItems, opponentsPastItems);
             }
 
             // Get the algorithm with the highest win rate.
-            var selectedAlgorithm = _algorithmStats.Aggregate((l, r) => l.Value > r.Value ? l : r).Key;
-            _pendingForDeletion.Add(selectedAlgorithm);
-            return selectedAlgorithm.PreviousItem;
+            return pickAlgorithm(roundElapsed).PreviousItem;
         }
 
-        private void updateStats(Item opponentsLastItem)
+        /// <summary>
+        ///     Selects the algorithm with the highest chance rate.
+        ///     The algorithm itself defines its chance rate.
+        /// </summary>
+        /// <param name="roundElapsed">The number of rounds elapsed.</param>
+        /// <returns>The optimal algorithm to used.</returns>
+        private IPlayerAlgorithm pickAlgorithm(int roundElapsed)
         {
-            foreach (var key in _algorithmStats.Keys.ToList())
+            IPlayerAlgorithm selectedAlgorithm = null;
+            var selectedAlgorithmChanceRate = default(float);
+            foreach (var algoItem in _algoList)
             {
-                if (!RpsHelper.IsRoundWon(key.PreviousItem, opponentsLastItem))
+                var chanceRate = algoItem.GetChanceRate(roundElapsed);
+
+                if (selectedAlgorithm != null &&
+                    selectedAlgorithmChanceRate >= chanceRate)
                 {
-                    _algorithmStats[key]--;
                     continue;
                 }
 
-                _algorithmStats[key]++;
+                selectedAlgorithm = algoItem;
+                selectedAlgorithmChanceRate = chanceRate;
             }
+
+            RpsHelper.Log($"Using {selectedAlgorithm?.GetType()}");
+            return selectedAlgorithm;
+        }
+
+        /// <summary>
+        ///     Forgets the result of a turn when max memory has been reached.
+        /// </summary>
+        /// <param name="roundElapsed">The number of rounds elapsed.</param>
+        private void applyMemory(int roundElapsed)
+        {
+            if (roundElapsed <= MAX_MEMORY)
+            {
+                return;
+            }
+
+            var memoryResultList = _pendingForDeletionResult.FirstOrDefault();
+
+            for (var i = 0; i < memoryResultList.Length; i++)
+            {
+                var algoItem = _algoList[i];
+
+                // Skip those algorithms who are statistics-based
+                // and won't use memory.
+                if (!algoItem.UseMemory)
+                {
+                    continue;
+                }
+
+                algoItem.UpdateWinCount(!memoryResultList[i], roundElapsed);
+            }
+
+            RpsHelper.Log($"Forgetting result {string.Join(",", memoryResultList)}");
+            _pendingForDeletionResult.RemoveAt(0);
+        }
+
+        private void updateStats(Item opponentsLastItem, int roundElapsed)
+        {
+            var resultList = new bool[_algoList.Count];
+            for (var i = 0; i < _algoList.Count; i++)
+            {
+                var algoItem = _algoList[i];
+                var isRoundWon = RpsHelper.IsRoundWon(algoItem.PreviousItem, opponentsLastItem);
+                algoItem.UpdateWinCount(isRoundWon, roundElapsed);
+                resultList[i] = isRoundWon;
+            }
+
+            _pendingForDeletionResult.Add(resultList);
         }
 
         #endregion
@@ -145,23 +199,30 @@ namespace RPS
     {
         #region Properties
 
+        bool UseMemory { get; set; }
+
+        int WinCount { get; }
+
         Item PreviousItem { get; set; }
+
+        #endregion
+
+        #region Methods
+
+        float GetChanceRate(int roundElapsed);
+
+        void UpdateWinCount(bool hasWon, int roundElapsed);
 
         #endregion
     }
 
-    /// <summary>
-    ///     Algorithm to counter <see cref="ChangeWhenLosingPreviousRoundAlgorithm" />.
-    /// </summary>
-    public class ChangeWhenLosingPreviousRoundCounterAlgorithm : IPlayerAlgorithm
+    public abstract class PlayerAlgorithm : IPlayerAlgorithm
     {
-        #region Fields
-
-        private Item _previousItem = Item.Paper;
-
-        #endregion
-
         #region Properties
+
+        public bool UseMemory { get; set; } = true;
+
+        public int WinCount { get; protected set; }
 
         public Item PreviousItem { get; set; }
 
@@ -169,7 +230,47 @@ namespace RPS
 
         #region Methods
 
-        public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        public abstract Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems);
+
+        public virtual float GetChanceRate(int roundElapsed)
+        {
+            if (roundElapsed == 0)
+            {
+                return 1f;
+            }
+
+            return (float)WinCount / roundElapsed;
+        }
+
+        public virtual void UpdateWinCount(bool hasWon, int roundElapsed)
+        {
+            if (hasWon)
+            {
+                WinCount++;
+            }
+            else
+            {
+                WinCount--;
+            }
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    ///     Algorithm to counter <see cref="ChangeWhenLosingPreviousRoundAlgorithm" />.
+    /// </summary>
+    public class ChangeWhenLosingPreviousRoundCounterAlgorithm : PlayerAlgorithm
+    {
+        #region Fields
+
+        private Item _previousItem = Item.Paper;
+
+        #endregion
+
+        #region Methods
+
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
             PreviousItem = getMove(yourPastItems, opponentsPastItems);
             return PreviousItem;
@@ -212,7 +313,7 @@ namespace RPS
     ///     This algorithm checks the last round if we won. If we lost, we change our
     ///     default return item to the item that beats the last item the opponent used.
     /// </summary>
-    public class ChangeWhenLosingPreviousRoundAlgorithm : IPlayerAlgorithm
+    public class ChangeWhenLosingPreviousRoundAlgorithm : PlayerAlgorithm
     {
         #region Fields
 
@@ -220,15 +321,9 @@ namespace RPS
 
         #endregion
 
-        #region Properties
-
-        public Item PreviousItem { get; set; }
-
-        #endregion
-
         #region Methods
 
-        public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
             PreviousItem = getMove(yourPastItems, opponentsPastItems);
             return PreviousItem;
@@ -270,11 +365,26 @@ namespace RPS
     /// <summary>
     ///     This algorithm randomly get from opponents past items and return a counter for it.
     /// </summary>   
-    public class RandomByNumberOfItemsAlgorithm : IPlayerAlgorithm
+    public class RandomByNumberOfItemsAlgorithm : PlayerAlgorithm
     {
-        public Item PreviousItem { get; set; }
+        #region Constants
 
-        public Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        private const int ACTIVATION_START_TURN = 50;
+
+        #endregion
+
+        #region Methods
+
+        #region Constructors
+
+        public RandomByNumberOfItemsAlgorithm()
+        {
+            UseMemory = false;
+        }
+
+        #endregion
+
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
             PreviousItem = getMove(opponentsPastItems);
             return PreviousItem;
@@ -286,7 +396,7 @@ namespace RPS
         private Item getMove(List<Item> opponentsPastItems)
         {
             double totalItem = opponentsPastItems.Count;
-            if (totalItem >= 50)
+            if (totalItem >= ACTIVATION_START_TURN)
             {
                 var opponentPick = new Item();
                 var ourPick = new Item();
@@ -308,6 +418,42 @@ namespace RPS
 
             return Item.Paper;
         }
+
+        public override float GetChanceRate(int roundElapsed)
+        {
+            // Only use this algorithm for turn 50 above.
+            if (roundElapsed < ACTIVATION_START_TURN)
+            {
+                return 0f;
+            }
+
+            if (roundElapsed == ACTIVATION_START_TURN)
+            {
+                return 1f;
+            }
+
+            return (float)WinCount / (roundElapsed - ACTIVATION_START_TURN);
+        }
+
+        public override void UpdateWinCount(bool hasWon, int roundElapsed)
+        {
+            // Don't update the state yet until it reaches the target turn no.
+            if (roundElapsed < ACTIVATION_START_TURN+1)
+            {
+                return;
+            }
+
+            if (hasWon)
+            {
+                WinCount++;
+            }
+            else
+            {
+                WinCount--;
+            }
+        }
+
+        #endregion
     }
 
 
@@ -318,7 +464,23 @@ namespace RPS
 
     public static class RpsHelper
     {
+        #region Constants
+
+        private const bool ENABLE_DEBUG = true;
+
+        #endregion
+
         #region Methods
+
+        public static void Log(string message)
+        {
+            if (!ENABLE_DEBUG)
+            {
+                return;
+            }
+
+            Console.WriteLine($"\t\t[DEBUG] {message}");
+        }
 
         /// <summary>
         ///     Checks within the rules of RPS if the player item
