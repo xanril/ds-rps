@@ -288,18 +288,25 @@ namespace RPS
             double totalItem = opponentsPastItems.Count;
             if (totalItem >= 50)
             {
-                var opponentPick = new Item();
                 var ourPick = new Item();
-                opponentPick = opponentsPastItems.OrderBy(x => Guid.NewGuid()).First();
-                if (opponentPick == Item.Paper)
+
+                // Query the most picked item.
+                var itemQuery = opponentsPastItems.GroupBy(x => x)
+                    .Select(group => new { ItemType = group.Key, Count = group.Count() })
+                    .OrderByDescending(x => x.Count);
+
+                // Get the top most picked item
+                var mostPickedItem = itemQuery.First();
+
+                if (mostPickedItem.ItemType == Item.Paper)
                 {
                     ourPick = Item.Scissors;
                 }
-                else if (opponentPick == Item.Rock)
+                else if (mostPickedItem.ItemType == Item.Rock)
                 {
                     ourPick = Item.Paper;
                 }
-                else if (opponentPick == Item.Scissors)
+                else if (mostPickedItem.ItemType == Item.Scissors)
                 {
                     ourPick = Item.Rock;
                 }
