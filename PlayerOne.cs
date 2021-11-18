@@ -18,16 +18,41 @@ namespace RPS
 
         public PlayerOne()
         {
-            _algorithmOrchestrator = new AlgorithmOrchestrator(new List<IPlayerAlgorithm>
+            var algoList = new List<IPlayerAlgorithm>
             {
                 new ChangeWhenLosingPreviousRoundAlgorithm(Item.Paper),
-                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Rock),
-                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Scissors),
                 new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Paper),
+                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Rock),
                 new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Rock),
+                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Scissors),
                 new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Scissors),
                 new RandomByNumberOfItemsAlgorithm(),
-            });
+                new AlwaysPickSameAlgorithm(Item.Paper),
+                new AlwaysPickSameAlgorithm(Item.Rock),
+                new AlwaysPickSameAlgorithm(Item.Scissors)
+            };
+
+            var sequence = new[] { Item.Scissors, Item.Paper, Item.Rock };
+            for (var i = 0; i < 5; i++)
+            {
+                foreach (var item in sequence)
+                {
+                    algoList.Add(new RepeatOpponentMoveWithDelayAlgorithm(item, i));
+                }
+            }
+
+            for (var i = 0; i < 3; i++)
+            {
+                for (var j = 0; j < 3; j++)
+                {
+                    for (var k = 0; k < 3; k++)
+                    {
+                        algoList.Add(new LoopThroughSequenceAlgorithm(new[] { sequence[i], sequence[j], sequence[k] }));
+                    }
+                }
+            }
+
+            _algorithmOrchestrator = new AlgorithmOrchestrator(algoList);
         }
 
         #endregion
@@ -533,6 +558,125 @@ namespace RPS
             return myItem == Item.Paper && opponentItem == Item.Rock
                    || (myItem == Item.Rock && opponentItem == Item.Scissors)
                    || (myItem == Item.Scissors && opponentItem == Item.Paper);
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    ///     Always pick the same item over and over and pray we'll win hehe
+    /// </summary>
+    public class AlwaysPickSameAlgorithm : PlayerAlgorithm
+    {
+        #region Fields
+
+        private readonly Item _item;
+
+        #endregion
+
+        #region Methods
+
+        #region Constructors
+
+        public AlwaysPickSameAlgorithm(Item item)
+        {
+            _item = item;
+        }
+
+        #endregion
+
+        public override float GetChanceRate(int roundElapsed)
+        {
+            return base.GetChanceRate(roundElapsed) * 0.5f;
+        }
+
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        {
+            return _item;
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    ///     Just imitate the opponent's last moves with delay.
+    /// </summary>
+    public class RepeatOpponentMoveWithDelayAlgorithm : PlayerAlgorithm
+    {
+        #region Fields
+
+        private readonly Item _initialItem;
+        private readonly int _delay;
+
+        #endregion
+
+        #region Methods
+
+        #region Constructors
+
+        public RepeatOpponentMoveWithDelayAlgorithm(Item initialItem, int delay)
+        {
+            _initialItem = initialItem;
+            _delay = delay;
+        }
+
+        #endregion
+
+        public override float GetChanceRate(int roundElapsed)
+        {
+            return base.GetChanceRate(roundElapsed) * 0.7f;
+        }
+
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        {
+            if (yourPastItems.Count <= _delay)
+            {
+                return _initialItem;
+            }
+
+            return opponentsPastItems[opponentsPastItems.Count - 1 - _delay];
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    ///     Just loops through a given sequence.
+    /// </summary>
+    public class LoopThroughSequenceAlgorithm : PlayerAlgorithm
+    {
+        private readonly IList<Item> _sequence;
+
+        #region Field
+
+        private int _index = 0;
+
+        #endregion
+
+        #region Methods
+
+        #region Constructors
+
+        public LoopThroughSequenceAlgorithm(IList<Item> sequence)
+        {
+            _sequence = sequence;
+        }
+
+        #endregion
+
+        public override float GetChanceRate(int roundElapsed)
+        {
+            return base.GetChanceRate(roundElapsed) * 0.7f;
+        }
+
+        public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
+        {
+            if (_index >= _sequence.Count)
+            {
+                _index = 0;
+            }
+            
+            return _sequence[_index++];
         }
 
         #endregion
