@@ -18,7 +18,16 @@ namespace RPS
 
         public PlayerOne()
         {
-            _algorithmOrchestrator = new AlgorithmOrchestrator();
+            _algorithmOrchestrator = new AlgorithmOrchestrator(new List<IPlayerAlgorithm>
+            {
+                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Paper),
+                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Rock),
+                new ChangeWhenLosingPreviousRoundAlgorithm(Item.Scissors),
+                new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Paper),
+                new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Rock),
+                new ChangeWhenLosingPreviousRoundCounterAlgorithm(Item.Scissors),
+                new RandomByNumberOfItemsAlgorithm(),
+            });
         }
 
         #endregion
@@ -52,7 +61,7 @@ namespace RPS
     {
         #region Constants
 
-        private const int MAX_MEMORY = 10;
+        private const int MAX_MEMORY = 20;
 
         #endregion
 
@@ -67,14 +76,9 @@ namespace RPS
 
         #region Constructors
 
-        public AlgorithmOrchestrator()
+        public AlgorithmOrchestrator(IList<IPlayerAlgorithm> algoList)
         {
-            _algoList = new List<IPlayerAlgorithm>
-            {
-                new ChangeWhenLosingPreviousRoundAlgorithm(),
-                new ChangeWhenLosingPreviousRoundCounterAlgorithm(),
-                new RandomByNumberOfItemsAlgorithm()
-            };
+            _algoList = algoList;
             
             _pendingForDeletionResult = new List<bool[]>(MAX_MEMORY);
         }
@@ -126,7 +130,7 @@ namespace RPS
                 var chanceRate = algoItem.GetChanceRate(roundElapsed);
 
                 if (selectedAlgorithm != null &&
-                    selectedAlgorithmChanceRate >= chanceRate)
+                    selectedAlgorithmChanceRate > chanceRate)
                 {
                     continue;
                 }
@@ -264,11 +268,20 @@ namespace RPS
     {
         #region Fields
 
-        private Item _previousItem = Item.Paper;
+        private Item _previousItem;
 
         #endregion
 
         #region Methods
+
+        #region Constructors
+
+        public ChangeWhenLosingPreviousRoundCounterAlgorithm(Item initialItem)
+        {
+            _previousItem = initialItem;
+        }
+
+        #endregion
 
         public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
@@ -278,6 +291,11 @@ namespace RPS
 
         private Item getMove(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
+            if (yourPastItems.Count == 0)
+            {
+                return _previousItem;
+            }
+
             var myItem = yourPastItems?.LastOrDefault();
             var opponentItem = opponentsPastItems?.LastOrDefault();
 
@@ -317,11 +335,20 @@ namespace RPS
     {
         #region Fields
 
-        private Item _previousItem = Item.Paper;
+        private Item _previousItem;
 
         #endregion
 
         #region Methods
+
+        #region Constructors
+
+        public ChangeWhenLosingPreviousRoundAlgorithm(Item initialItem)
+        {
+            _previousItem = initialItem;
+        }
+
+        #endregion
 
         public override Item GetItem(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
@@ -331,6 +358,11 @@ namespace RPS
 
         private Item getMove(List<Item> yourPastItems, List<Item> opponentsPastItems)
         {
+            if (yourPastItems.Count == 0)
+            {
+                return _previousItem;
+            }
+
             var myItem = yourPastItems?.LastOrDefault();
             var opponentItem = opponentsPastItems?.LastOrDefault();
 
@@ -369,7 +401,7 @@ namespace RPS
     {
         #region Constants
 
-        private const int ACTIVATION_START_TURN = 50;
+        private const int ACTIVATION_START_TURN = 100;
 
         #endregion
 
@@ -431,7 +463,7 @@ namespace RPS
             // Only use this algorithm for turn 50 above.
             if (roundElapsed < ACTIVATION_START_TURN)
             {
-                return 0f;
+                return -100f;
             }
 
             if (roundElapsed == ACTIVATION_START_TURN)
@@ -473,7 +505,7 @@ namespace RPS
     {
         #region Constants
 
-        private const bool ENABLE_DEBUG = true;
+        private const bool ENABLE_DEBUG = false;
 
         #endregion
 
